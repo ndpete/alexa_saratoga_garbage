@@ -1,2 +1,4 @@
 GetDay when is the next garbage day
 GetDay when is garbage day
+GetDay tell me when garbage day is
+GetDay tell me the next garbage day
