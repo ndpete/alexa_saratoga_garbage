@@ -1,7 +1,7 @@
 *.*
-! .gitignore
-! speechAssets/*
-! app.py
-! LICENSE
-! README
-! requirements.txt
+!.gitignore
+!speechAssets/*
+!app.py
+!LICENSE
+!README
+!requirements.txt
