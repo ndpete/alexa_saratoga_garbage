@@ -1,20 +1,26 @@
-#!/usr/bin/env python3
-
-from icalendar import Calendar
+import json
+import os
+import boto3
 import datetime as dt
-import urllib.request
 from operator import itemgetter
 
 
-def get_cal(direction=False):
-    if direction == 'North':
-        url = 'https://calendar.google.com/calendar/ical/ik3r8hp2qds6g7247jr09nhoas%40group.calendar.google.com/public/basic.ics'
-    elif direction == 'South':
-        url = 'https://calendar.google.com/calendar/ical/mk1thfp53sqnlcemg4o1d0vua0%40group.calendar.google.com/public/basic.ics'
+def get_dates(direction, service=False):
+    with open('dates.json') as f:
+        table = json.load(f)
+    if service:
+        service = f'{direction}-{service}'
+        dates = parse_list_dates(table[service], service)
     else:
-        url = 'https://calendar.google.com/calendar/ical/ik3r8hp2qds6g7247jr09nhoas%40group.calendar.google.com/public/basic.ics'
-    with urllib.request.urlopen(url) as cal:
-        return Calendar.from_ical(cal.read())
+        trash = parse_list_dates(table[f'{direction}-trash'], 'garbage')
+        recycle = parse_list_dates(table[f'{direction}-recycle'], 'recycle')
+        dates = (trash, recycle)
+    return dates
+
+
+def parse_list_dates(src, service):
+    if isinstance(src, list):
+        return [{'service': service, 'date': dt.datetime.strptime(d, '%Y-%m-%d').date()} for d in src]
 
 
 def build_response(output, should_end_session):
@@ -48,24 +54,25 @@ def build_speech_response(output, should_end_session):
 
 def build_output_speech(_events):
     if len(_events) == 2:
-        return "The next {} is {} and {} is {}".format(_events[0]['summary'], _events[0]['date'], _events[1]['summary'], _events[1]['date'])
+        return "The next {} day is {} and {} day is {}".format(_events[0]['service'], _events[0]['date'], _events[1]['service'], _events[1]['date'])
     elif len(_events) == 1:
-        return "The next {} is {}".format(_events[0]['summary'], _events[0]['date'])
+        return "The next {} day is {}".format(_events[0]['service'], _events[0]['date'])
     elif len(_events) == 0:
         return "No days within the next week."
     else:
         _out = 'The next '
         for x in _events:
-            _out = _out + "{} is {} ".format(x['summary'], x['date'])
+            _out = _out + "{} is {} ".format(x['service'], x['date'])
         return _out
 
 
 def get_day():
     today = dt.date.today()
     one_week = (today + dt.timedelta(days=7))
-    cal = get_cal()
-    events = cal.walk('vevent')
-    _week = [{'summary': event.decoded('summary').decode(), 'date': event.decoded('dtstart')} for event in events if today <= event.decoded('dtstart') <= one_week]
+    trash_events, recycle_events = get_dates('north')
+    trash_week = [event for event in trash_events if today <= event['date'] <= one_week]
+    recycle_week = [event for event in recycle_events if today <= event['date'] <= one_week]
+    _week = trash_week + recycle_week
     sorted_week = sorted(_week, key=itemgetter('date'))
     if len(sorted_week) > 2:
         sorted_week = sorted_week[:2]
@@ -86,8 +93,9 @@ def on_intent(request):
 
 
 def handler(event, context):
-    # Placeholder to verify request
-    if False:  # (event['session']['application']['applicationId'] != "amzn1.echo-sdk-ams.app.bd304b90-xxxx-xxxx-86ae-1e4fd4772bab"):
+    ssm = boto3.client('ssm')
+    app_id = ssm.get_parameter(Name='saratoga-garbage.prd.appid')['Parameter']['Value']
+    if (event['session']['application']['applicationId'] != app_id):
         raise ValueError("Invalid Application ID")
 
     if event['request']['type'] == 'IntentRequest':

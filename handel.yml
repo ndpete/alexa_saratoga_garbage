@@ -1,0 +1,16 @@
+version: 1
+
+name: saratoga-garbage
+
+environments:
+  prd:
+    function:
+      type: lambda
+      path_to_code: .
+      handler: app.handler
+      runtime: python3.6
+      timeout: 10
+    alexaskill:
+      type: alexaskillkit
+      event_consumers:
+      - service_name: function
